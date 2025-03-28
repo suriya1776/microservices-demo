@@ -97,7 +97,7 @@ class EmailService(BaseEmailService):
     try:
       EmailService.send_email(self.client, email, confirmation)
     except GoogleAPICallError as err:
-      context.set_details("An error occurred when sending the email.")
+      context.set_details("An error occurred when sending the email..")
       print(err.message)
       context.set_code(grpc.StatusCode.INTERNAL)
       return demo_pb2.Empty()
