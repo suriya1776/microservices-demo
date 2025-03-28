@@ -16,7 +16,7 @@ jobs:
 
       - name: Fetch Latest Image Tag from GHCR
         run: |
-          IMAGE_REPO="ghcr.io/${{ github.repository }}/my-app"
+          IMAGE_REPO="ghcr.io/suriya1776/adservice"
           LATEST_TAG=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://ghcr.io/v2/${{ github.repository }}/my-app/tags/list" | jq -r '.tags | sort | last')
 
