@@ -200,7 +200,7 @@ func initProfiling(service, version string) {
 func mustMapEnv(target *string, envKey string) {
 	v := os.Getenv(envKey)
 	if v == "" {
-		panic(fmt.Sprintf("environment1 variable %q not set", envKey))
+		panic(fmt.Sprintf("environment variable %q not set", envKey))
 	}
 	*target = v
 }
