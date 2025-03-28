@@ -1,0 +1,49 @@
+name: CodeQL Analysis
+run-name: codeQL scanning
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  codeql-analysis:
+    name: CodeQL Scan for Java
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Ensures full commit history for better analysis
+
+      - name: Set up JDK 21.0.5 (Temurin)
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '21.0.5'
+
+      - name: Verify Java Version
+        run: java -version
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: java
+
+      - name: Grant Execute Permission for Gradle
+        run: chmod +x gradlew
+        working-directory: src/adservice
+
+      - name: Download Gradle Repositories
+        run: ./gradlew downloadRepos
+        working-directory: src/adservice
+
+      - name: Install Application Distribution
+        run: ./gradlew installDist
+        working-directory: src/adservice
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
