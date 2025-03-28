@@ -3,7 +3,7 @@ name: Build and Push Microservices
 on:
   push:
     branches:
-      - main  # Change this to your target branch
+      - main  # Adjust to your target branch
 
 jobs:
   find-changed-microservices:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2  # Needed for git diff
+          fetch-depth: 2  # Fetch at least the last commit for diff comparison
 
       - name: Find Changed Microservices
         id: find-changes
@@ -23,19 +23,21 @@ jobs:
           echo "Changed files: $changed_files"
 
           changed_microservices=$(echo "$changed_files" | awk -F'/' '/^src\// {print $2}' | sort -u | paste -sd "," -)
-          echo "Changed microservices: $changed_microservices"
-
+          
           if [ -z "$changed_microservices" ]; then
             echo "No microservices changed. Skipping workflow."
             echo "changed_services=" >> $GITHUB_ENV
-            exit 0  # Special exit code to stop the job without failing
+            exit 0  # Do not fail the workflow
           fi
 
+          echo "Changed microservices: $changed_microservices"
           echo "changed_services=$changed_microservices" >> $GITHUB_ENV
+          echo "::set-output name=changed_services::$changed_microservices"
 
   find-dockerfiles:
     runs-on: ubuntu-latest
     needs: find-changed-microservices
+    if: needs.find-changed-microservices.outputs.changed_services != ''
     outputs:
       valid_services: ${{ steps.find-dockerfiles.outputs.valid_services }}
     steps:
@@ -47,9 +49,8 @@ jobs:
         run: |
           valid_services=""
 
-          IFS=',' read -ra SERVICES <<< "${{ needs.find-changed-microservices.outputs.changed_services }}"
-          for service in "${SERVICES[@]}"; do
-            dockerfile_path=$(find src/$service -type f -name 'Dockerfile' | head -n 1)
+          for service in $(echo "${{ needs.find-changed-microservices.outputs.changed_services }}" | tr ',' ' '); do
+            dockerfile_path=$(find src/$service -type f -name 'Dockerfile' | head -n 1 || echo "")
             if [ -n "$dockerfile_path" ]; then
               echo "Dockerfile found: $dockerfile_path"
               valid_services+="$service:$dockerfile_path,"
@@ -62,14 +63,17 @@ jobs:
 
           if [ -z "$valid_services" ]; then
             echo "No services with Dockerfile found. Skipping workflow."
-            exit 78
+            exit 0  # Do not fail the workflow
           fi
 
+          echo "Valid services: $valid_services"
           echo "valid_services=$valid_services" >> $GITHUB_ENV
+          echo "::set-output name=valid_services::$valid_services"
 
   login-to-ghcr:
     runs-on: ubuntu-latest
     needs: find-dockerfiles
+    if: needs.find-dockerfiles.outputs.valid_services != ''
     steps:
       - name: Log in to GHCR
         run: |
@@ -81,14 +85,14 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     needs: login-to-ghcr
+    if: needs.find-dockerfiles.outputs.valid_services != ''
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Build and Push Docker Images
         run: |
-          IFS=',' read -ra SERVICES <<< "${{ needs.find-dockerfiles.outputs.valid_services }}"
-          for entry in "${SERVICES[@]}"; do
+          for entry in $(echo "${{ needs.find-dockerfiles.outputs.valid_services }}" | tr ',' ' '); do
             IFS=':' read -r service dockerfile_path <<< "$entry"
             image_name="ghcr.io/${{ secrets.GHCR_USERNAME }}/$service:latest"
             dockerfile_dir=$(dirname "$dockerfile_path")
