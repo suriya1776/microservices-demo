@@ -7,28 +7,51 @@ on:
 
 jobs:
   build:
-    name: Build and Analyze
+    name: Build with OpenJDK 21.0.5 and Run SonarQube
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
         with:
-          fetch-depth: 0  # Required for SonarQube to work properly
+          fetch-depth: 0  # Ensures full commit history for SonarQube analysis
 
-      - name: Set up JDK 21
+      - name: Set up JDK 21.0.5 (Temurin)
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '21.0.5'
+
+      - name: Verify Java Version
+        run: java -version
+
+      - name: Set Working Directory
+        run: mkdir -p /app
+        working-directory: src/adservice
+
+      - name: Copy Build Files
+        run: |
+          cp build.gradle gradlew /app/
+          cp -r gradle /app/
+        working-directory: src/adservice
 
       - name: Grant Execute Permission for Gradle
-        run: chmod +x gradlew
+        run: chmod +x /app/gradlew
+
+      - name: Download Gradle Repositories
+        run: /app/gradlew downloadRepos
+        working-directory: /app
+
+      - name: Copy Source Code
+        run: cp -r . /app/
         working-directory: src/adservice
 
-      - name: Build the Project
-        run: ./gradlew build
-        working-directory: src/adservice
+      - name: Grant Execute Permission Again
+        run: chmod +x /app/gradlew
+
+      - name: Install Application Distribution
+        run: /app/gradlew installDist
+        working-directory: /app
 
       - name: Run SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
@@ -36,10 +59,10 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
         with:
-          projectBaseDir: src/adservice
+          projectBaseDir: /app
           args: >
             -Dsonar.sources=src
-            -Dsonar.java.binaries=build
+            -Dsonar.java.binaries=build/install/hipstershop/lib
 
       # Uncomment the following lines if you want to fail the build if the Quality Gate fails
       # - name: SonarQube Quality Gate Check
