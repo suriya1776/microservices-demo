@@ -76,7 +76,7 @@ pipeline {
                     sh """
                         echo '${GHCR_CREDENTIALS_PSW}' | docker login ghcr.io -u '${GHCR_CREDENTIALS_USR}' --password-stdin
                     """
-                    echo "Successfully logged in to GHCR"
+                    echo "Successfully logged in to GHCR.."
                 }
             }
         }
