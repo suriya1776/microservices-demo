@@ -29,7 +29,7 @@ jobs:
             exit 0
           fi
 
-          echo "Changed microservices: $changed_microservices"
+          echo "Changed microservices : $changed_microservices"
           echo "changed_services=$changed_microservices" >> $GITHUB_ENV
           echo "changed_services=$changed_microservices" >> $GITHUB_OUTPUT
 
