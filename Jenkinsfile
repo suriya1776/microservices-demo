@@ -32,6 +32,18 @@ pipeline {
                     } else {
                         echo "Changed microservices: ${changedMicroservices.join(', ')}"
                         echo "Number of changed microservices: ${changedMicroservices.size()}"
+
+                        // Find Dockerfile for each changed microservice
+                        changedMicroservices.each { service ->
+                            def dockerfilePath = "src/${service}/Dockerfile"
+                            def exists = sh(script: "test -f ${dockerfilePath} && echo exists || echo missing", returnStdout: true).trim()
+                            
+                            if (exists == "exists") {
+                                echo "Dockerfile found: ${dockerfilePath}"
+                            } else {
+                                echo "No Dockerfile found in ${service}"
+                            }
+                        }
                     }
                 }
             }
