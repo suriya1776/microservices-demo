@@ -25,33 +25,17 @@ jobs:
       - name: Verify Java Version
         run: java -version
 
-      - name: Set Working Directory
-        run: mkdir -p /app
-        working-directory: src/adservice
-
-      - name: Copy Build Files
-        run: |
-          cp build.gradle gradlew /app/
-          cp -r gradle /app/
-        working-directory: src/adservice
-
       - name: Grant Execute Permission for Gradle
-        run: chmod +x /app/gradlew
+        run: chmod +x gradlew
+        working-directory: src/adservice
 
       - name: Download Gradle Repositories
-        run: /app/gradlew downloadRepos
-        working-directory: /app
-
-      - name: Copy Source Code
-        run: cp -r . /app/
+        run: ./gradlew downloadRepos
         working-directory: src/adservice
 
-      - name: Grant Execute Permission Again
-        run: chmod +x /app/gradlew
-
       - name: Install Application Distribution
-        run: /app/gradlew installDist
-        working-directory: /app
+        run: ./gradlew installDist
+        working-directory: src/adservice
 
       - name: Run SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
@@ -59,12 +43,12 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
         with:
-          projectBaseDir: /app
+          projectBaseDir: src/adservice
           args: >
             -Dsonar.sources=src
             -Dsonar.java.binaries=build/install/hipstershop/lib
 
-      # Uncomment the following lines if you want to fail the build if the Quality Gate fails
+      # Uncomment if you want to fail the build if the Quality Gate fails
       # - name: SonarQube Quality Gate Check
       #   uses: sonarsource/sonarqube-quality-gate-action@master
       #   timeout-minutes: 5
