@@ -3,7 +3,7 @@ name: Build and Push Microservices
 on:
   push:
     branches:
-      - main  # Adjust this to your target branch
+      - main  # Adjust to your target branch
 
 jobs:
   find-changed-microservices:
@@ -27,9 +27,9 @@ jobs:
           if [ -z "$changed_microservices" ]; then
             echo "No microservices changed. Skipping workflow."
             echo "changed_services=" >> $GITHUB_ENV
-            exit 0  # Do not fail the workflow
+            exit 0
           fi
-
+          
           echo "Changed microservices: $changed_microservices"
           echo "changed_services=$changed_microservices" >> $GITHUB_ENV
           echo "::set-output name=changed_services::$changed_microservices"
@@ -48,6 +48,7 @@ jobs:
         id: find-dockerfiles
         run: |
           valid_services=""
+          echo "Changed services: '${{ needs.find-changed-microservices.outputs.changed_services }}'"
 
           for service in $(echo "${{ needs.find-changed-microservices.outputs.changed_services }}" | tr ',' ' '); do
             dockerfile_path=$(find src/$service -type f -name 'Dockerfile' | head -n 1 || echo "")
@@ -62,11 +63,11 @@ jobs:
           valid_services=${valid_services%,}  # Remove trailing comma
 
           if [ -z "$valid_services" ]; then
-            echo "No services with Dockerfile found. Skipping workflow."
-            exit 0  # Do not fail the workflow
+            echo "No valid services found. Exiting."
+            exit 0
           fi
 
-          echo "Valid services: $valid_services"
+          echo "Valid services: '$valid_services'"
           echo "valid_services=$valid_services" >> $GITHUB_ENV
           echo "::set-output name=valid_services::$valid_services"
 
@@ -96,32 +97,24 @@ jobs:
 
       - name: Build and Push Docker Images
         run: |
-          SERVICES="${{ needs.find-dockerfiles.outputs.valid_services }}"
-          echo "SERVICES: '$SERVICES'"
-
-          if [[ -z "$SERVICES" ]]; then
-            echo "No valid services found. Exiting."
-            exit 0
-          fi
-
-          IFS=',' read -ra SERVICE_LIST <<< "$SERVICES"
-
-          for entry in "${SERVICE_LIST[@]}"; do
+          IFS=',' read -ra SERVICES <<< "${{ needs.find-dockerfiles.outputs.valid_services }}"
+          
+          for entry in "${SERVICES[@]}"; do
             IFS=':' read -r service dockerfile_path <<< "$entry"
-
+            
             if [[ -z "$service" || -z "$dockerfile_path" ]]; then
               echo "Skipping invalid entry: $entry"
               continue
             fi
-
+            
             image_name="ghcr.io/${{ secrets.GHCR_USERNAME }}/$service:latest"
             dockerfile_dir=$(dirname "$dockerfile_path")
-
-            echo "Building image for $service from $dockerfile_dir..."
+          
+            echo "Building image for $service..."
             docker build -t "$image_name" "$dockerfile_dir"
-
+          
             echo "Pushing image $image_name..."
             docker push "$image_name"
-
+          
             echo "Successfully pushed $image_name"
           done
