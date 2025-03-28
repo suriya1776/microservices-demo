@@ -1,8 +1,10 @@
 name: Image Scan
 
 on:
-  registry_package:
-    types: [published]
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: # Allows manual trigger
 
 jobs:
   scan-image:
@@ -13,13 +15,11 @@ jobs:
       - name: Log in to GitHub Container Registry (GHCR)
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
-      - name: Extract Image Name and Tag from Event
+      - name: Extract Image Name and Tag
         run: |
-          IMAGE_NAME="${{ github.event.registry_package.name }}"
-          IMAGE_VERSION="${{ github.event.registry_package.package_version }}"
-          FULL_IMAGE="ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME:$IMAGE_VERSION"
-          echo "FULL_IMAGE=$FULL_IMAGE" >> $GITHUB_ENV
-          echo "Scanning Image: $FULL_IMAGE"
+          IMAGE_NAME="ghcr.io/${{ github.repository }}/my-app:${{ github.ref_name }}"
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+          echo "Scanning Image: $IMAGE_NAME"
 
       - name: Install Trivy
         run: |
@@ -27,4 +27,4 @@ jobs:
 
       - name: Scan Image for Vulnerabilities
         run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ env.FULL_IMAGE }}
+          trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ env.IMAGE_NAME }}
