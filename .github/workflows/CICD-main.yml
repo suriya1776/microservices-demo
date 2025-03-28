@@ -3,7 +3,7 @@ name: Build and Push Microservices
 on:
   push:
     branches:
-      - main  # Adjust to your target branch
+      - main  # Adjust this to your target branch
 
 jobs:
   find-changed-microservices:
@@ -23,11 +23,11 @@ jobs:
           echo "Changed files: $changed_files"
 
           changed_microservices=$(echo "$changed_files" | awk -F'/' '/^src\// {print $2}' | sort -u | paste -sd "," -)
-
-          if [[ -z "$changed_microservices" ]]; then
+          
+          if [ -z "$changed_microservices" ]; then
             echo "No microservices changed. Skipping workflow."
             echo "changed_services=" >> $GITHUB_ENV
-            exit 0
+            exit 0  # Do not fail the workflow
           fi
 
           echo "Changed microservices: $changed_microservices"
@@ -51,19 +51,19 @@ jobs:
 
           for service in $(echo "${{ needs.find-changed-microservices.outputs.changed_services }}" | tr ',' ' '); do
             dockerfile_path=$(find src/$service -type f -name 'Dockerfile' | head -n 1 || echo "")
-            if [[ -n "$dockerfile_path" ]]; then
+            if [ -n "$dockerfile_path" ]; then
               echo "Dockerfile found for $service: $dockerfile_path"
               valid_services+="$service:$dockerfile_path,"
             else
-              echo "No Dockerfile found in $service"
+              echo "No Dockerfile found for $service"
             fi
           done
 
           valid_services=${valid_services%,}  # Remove trailing comma
 
-          if [[ -z "$valid_services" ]]; then
+          if [ -z "$valid_services" ]; then
             echo "No services with Dockerfile found. Skipping workflow."
-            exit 0
+            exit 0  # Do not fail the workflow
           fi
 
           echo "Valid services: $valid_services"
@@ -90,9 +90,15 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Debug Valid Services
+        run: |
+          echo "Valid services received: '${{ needs.find-dockerfiles.outputs.valid_services }}'"
+
       - name: Build and Push Docker Images
         run: |
           SERVICES="${{ needs.find-dockerfiles.outputs.valid_services }}"
+          echo "SERVICES: '$SERVICES'"
+
           if [[ -z "$SERVICES" ]]; then
             echo "No valid services found. Exiting."
             exit 0
@@ -111,7 +117,7 @@ jobs:
             image_name="ghcr.io/${{ secrets.GHCR_USERNAME }}/$service:latest"
             dockerfile_dir=$(dirname "$dockerfile_path")
 
-            echo "Building image for $service..."
+            echo "Building image for $service from $dockerfile_dir..."
             docker build -t "$image_name" "$dockerfile_dir"
 
             echo "Pushing image $image_name..."
