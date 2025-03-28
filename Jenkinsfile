@@ -37,30 +37,32 @@ pipeline {
             }
         }
 
-        stage('Check for Dockerfile') {
+        stage('Find Dockerfile Paths') {
             steps {
                 script {
-                    def validMicroservices = []
+                    def validMicroservices = [:]
 
                     env.CHANGED_MICROSERVICES.split(',').each { service ->
-                        def dockerfilePath = "src/${service}/Dockerfile"
-                        def exists = sh(script: "test -f ${dockerfilePath} && echo exists || echo missing", returnStdout: true).trim()
+                        def dockerfilePath = sh(
+                            script: "find src/${service} -type f -name 'Dockerfile' | head -n 1",
+                            returnStdout: true
+                        ).trim()
 
-                        if (exists == "exists") {
+                        if (dockerfilePath) {
                             echo "Dockerfile found: ${dockerfilePath}"
-                            validMicroservices.add(service)
+                            validMicroservices[service] = dockerfilePath
                         } else {
                             echo "No Dockerfile found in ${service}"
                         }
                     }
-
-                    env.VALID_MICROSERVICES = validMicroservices.join(',')
 
                     if (validMicroservices.isEmpty()) {
                         echo "No services with Dockerfile found. Aborting build."
                         currentBuild.result = 'ABORTED'
                         error("No services with Dockerfile found.")
                     }
+
+                    env.VALID_MICROSERVICES = validMicroservices.collect { k, v -> "$k:$v" }.join(',')
                 }
             }
         }
@@ -85,9 +87,10 @@ pipeline {
             }
             steps {
                 script {
-                    env.VALID_MICROSERVICES.split(',').each { service ->
+                    env.VALID_MICROSERVICES.split(',').each { entry ->
+                        def (service, dockerfilePath) = entry.tokenize(":")
                         def imageName = "ghcr.io/${GHCR_CREDENTIALS_USR}/${service}:latest"
-                        def dockerfileDir = "src/${service}"
+                        def dockerfileDir = dockerfilePath.replace('/Dockerfile', '')
 
                         echo "Building and pushing image for ${service}..."
                         sh """
