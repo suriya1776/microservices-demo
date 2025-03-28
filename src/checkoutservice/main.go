@@ -191,7 +191,7 @@ func initProfiling(service, version string) {
 			return
 		}
 		d := time.Second * 10 * time.Duration(i)
-		log.Infof("sleeping1 %v to retry initializing Stackdriver profiler1", d)
+		log.Infof("sleeping %v to retry initializing Stackdriver profiler1", d)
 		time.Sleep(d)
 	}
 	log.Warn("could not initialize Stackdriver profiler after retrying, giving up")
