@@ -14,7 +14,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2  # Fetch at least the last commit for diff comparison
+          fetch-depth: 2  # Fetch last commit for diff comparison
 
       - name: Find Changed Microservices
         id: find-changes
@@ -24,15 +24,15 @@ jobs:
 
           changed_microservices=$(echo "$changed_files" | awk -F'/' '/^src\// {print $2}' | sort -u | paste -sd "," -)
           
-          if [ -z "$changed_microservices" ]; then
-            echo "No microservices changed. Skipping workflow."
+          if [[ -z "$changed_microservices" ]]; then
+            echo "No microservices changed. Exiting."
             echo "changed_services=" >> $GITHUB_ENV
             exit 0
           fi
-          
+
           echo "Changed microservices: $changed_microservices"
           echo "changed_services=$changed_microservices" >> $GITHUB_ENV
-          echo "::set-output name=changed_services::$changed_microservices"
+          echo "changed_services=$changed_microservices" >> $GITHUB_OUTPUT
 
   find-dockerfiles:
     runs-on: ubuntu-latest
@@ -48,11 +48,11 @@ jobs:
         id: find-dockerfiles
         run: |
           valid_services=""
-          echo "Changed services: '${{ needs.find-changed-microservices.outputs.changed_services }}'"
-
-          for service in $(echo "${{ needs.find-changed-microservices.outputs.changed_services }}" | tr ',' ' '); do
+          IFS=',' read -ra services <<< "${{ needs.find-changed-microservices.outputs.changed_services }}"
+          
+          for service in "${services[@]}"; do
             dockerfile_path=$(find src/$service -type f -name 'Dockerfile' | head -n 1 || echo "")
-            if [ -n "$dockerfile_path" ]; then
+            if [[ -n "$dockerfile_path" ]]; then
               echo "Dockerfile found for $service: $dockerfile_path"
               valid_services+="$service:$dockerfile_path,"
             else
@@ -62,14 +62,14 @@ jobs:
 
           valid_services=${valid_services%,}  # Remove trailing comma
 
-          if [ -z "$valid_services" ]; then
-            echo "No valid services found. Exiting."
+          if [[ -z "$valid_services" ]]; then
+            echo "No services with Dockerfile found. Exiting."
             exit 0
           fi
 
-          echo "Valid services: '$valid_services'"
+          echo "Valid services: $valid_services"
           echo "valid_services=$valid_services" >> $GITHUB_ENV
-          echo "::set-output name=valid_services::$valid_services"
+          echo "valid_services=$valid_services" >> $GITHUB_OUTPUT
 
   login-to-ghcr:
     runs-on: ubuntu-latest
@@ -85,15 +85,14 @@ jobs:
 
   build-and-push:
     runs-on: ubuntu-latest
-    needs: login-to-ghcr
+    needs: [login-to-ghcr, find-dockerfiles]
     if: needs.find-dockerfiles.outputs.valid_services != ''
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Debug Valid Services
-        run: |
-          echo "Valid services received: '${{ needs.find-dockerfiles.outputs.valid_services }}'"
+        run: echo "Valid services received: '${{ needs.find-dockerfiles.outputs.valid_services }}'"
 
       - name: Build and Push Docker Images
         run: |
