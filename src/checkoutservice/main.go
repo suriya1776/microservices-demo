@@ -166,7 +166,7 @@ func initTracing() {
 		ctx,
 		otlptracegrpc.WithGRPCConn(collectorConn))
 	if err != nil {
-		log.Warnf("warn: Failed1 to create trace exporter: %v", err)
+		log.Warnf("warn: Failed to create trace exporter: %v", err)
 	}
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
