@@ -27,7 +27,8 @@ jobs:
 
           if [ -z "$changed_microservices" ]; then
             echo "No microservices changed. Skipping workflow."
-            exit 78  # Special exit code to stop the job without failing
+            echo "changed_services=" >> $GITHUB_ENV
+            exit 0  # Special exit code to stop the job without failing
           fi
 
           echo "changed_services=$changed_microservices" >> $GITHUB_ENV
