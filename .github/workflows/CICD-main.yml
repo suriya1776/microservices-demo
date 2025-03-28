@@ -23,16 +23,16 @@ jobs:
           echo "Changed files: $changed_files"
 
           changed_microservices=$(echo "$changed_files" | awk -F'/' '/^src\// {print $2}' | sort -u | paste -sd "," -)
-          
+
           if [[ -z "$changed_microservices" ]]; then
             echo "No microservices changed. Skipping workflow."
             echo "changed_services=" >> $GITHUB_ENV
-            exit 0  # Do not fail the workflow
+            exit 0
           fi
 
           echo "Changed microservices: $changed_microservices"
           echo "changed_services=$changed_microservices" >> $GITHUB_ENV
-          echo "changed_services=$changed_microservices" >> "$GITHUB_OUTPUT"
+          echo "::set-output name=changed_services::$changed_microservices"
 
   find-dockerfiles:
     runs-on: ubuntu-latest
@@ -50,8 +50,7 @@ jobs:
           valid_services=""
 
           for service in $(echo "${{ needs.find-changed-microservices.outputs.changed_services }}" | tr ',' ' '); do
-            dockerfile_path=$(find "src/$service" -type f -name 'Dockerfile' | head -n 1 || echo "")
-            
+            dockerfile_path=$(find src/$service -type f -name 'Dockerfile' | head -n 1 || echo "")
             if [[ -n "$dockerfile_path" ]]; then
               echo "Dockerfile found for $service: $dockerfile_path"
               valid_services+="$service:$dockerfile_path,"
@@ -60,17 +59,16 @@ jobs:
             fi
           done
 
-          valid_services="${valid_services%,}"  # Remove trailing comma
+          valid_services=${valid_services%,}  # Remove trailing comma
 
           if [[ -z "$valid_services" ]]; then
             echo "No services with Dockerfile found. Skipping workflow."
-            echo "valid_services=" >> $GITHUB_ENV
-            exit 0  # Do not fail the workflow
+            exit 0
           fi
 
           echo "Valid services: $valid_services"
           echo "valid_services=$valid_services" >> $GITHUB_ENV
-          echo "valid_services=$valid_services" >> "$GITHUB_OUTPUT"
+          echo "::set-output name=valid_services::$valid_services"
 
   login-to-ghcr:
     runs-on: ubuntu-latest
@@ -94,16 +92,22 @@ jobs:
 
       - name: Build and Push Docker Images
         run: |
-          IFS=',' read -ra SERVICES <<< "${{ needs.find-dockerfiles.outputs.valid_services }}"
-          
-          for entry in "${SERVICES[@]}"; do
+          SERVICES="${{ needs.find-dockerfiles.outputs.valid_services }}"
+          if [[ -z "$SERVICES" ]]; then
+            echo "No valid services found. Exiting."
+            exit 0
+          fi
+
+          IFS=',' read -ra SERVICE_LIST <<< "$SERVICES"
+
+          for entry in "${SERVICE_LIST[@]}"; do
             IFS=':' read -r service dockerfile_path <<< "$entry"
-            
+
             if [[ -z "$service" || -z "$dockerfile_path" ]]; then
               echo "Skipping invalid entry: $entry"
               continue
             fi
-            
+
             image_name="ghcr.io/${{ secrets.GHCR_USERNAME }}/$service:latest"
             dockerfile_dir=$(dirname "$dockerfile_path")
 
