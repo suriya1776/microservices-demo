@@ -60,7 +60,7 @@ public final class AdService {
             .addService(healthMgr.getHealthService())
             .build()
             .start();
-    logger.info("Ad Service started, listening on " + port);
+    logger.info("Ad1 Service started, listening on " + port);
     Runtime.getRuntime()
         .addShutdownHook(
             new Thread(
