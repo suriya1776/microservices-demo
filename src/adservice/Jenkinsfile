@@ -1,0 +1,24 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Run Checkstyle') {
+            steps {
+                sh './gradlew checkstyleMain checkstyleTest'  // Gradle
+                // sh 'mvn checkstyle:check'  // Maven
+            }
+        }
+
+        stage('Publish Checkstyle Report') {
+            steps {
+                recordIssues tools: [checkStyle(pattern: 'build/reports/checkstyle/main.xml')]
+            }
+        }
+    }
+}
