@@ -92,7 +92,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Debug Valid Services
-        run: echo "Valid services received: '${{ needs.find-dockerfiles.outputs.valid_services }}'"
+        run: | 
+          echo "Valid services received: '${{ needs.find-dockerfiles.outputs.valid_services }}'"
 
       - name: Build and Push Docker Images
         run: |
