@@ -27,9 +27,9 @@ pipeline {
                     env.CHANGED_MICROSERVICES = changedMicroservices.join(',')
 
                     if (changedMicroservices.isEmpty()) {
-                        echo "No microservices changed."
+                        echo "No microservices changed. Aborting build."
                         currentBuild.result = 'ABORTED'
-                        return
+                        error("No microservices changed.")
                     } else {
                         echo "Changed microservices: ${env.CHANGED_MICROSERVICES}"
                     }
@@ -57,15 +57,18 @@ pipeline {
                     env.VALID_MICROSERVICES = validMicroservices.join(',')
 
                     if (validMicroservices.isEmpty()) {
-                        echo "No services with Dockerfile found."
+                        echo "No services with Dockerfile found. Aborting build."
                         currentBuild.result = 'ABORTED'
-                        return
+                        error("No services with Dockerfile found.")
                     }
                 }
             }
         }
 
         stage('Login to GHCR') {
+            when {
+                expression { env.VALID_MICROSERVICES?.trim() }
+            }
             steps {
                 script {
                     sh """
@@ -77,6 +80,9 @@ pipeline {
         }
 
         stage('Build and Push Docker Image') {
+            when {
+                expression { env.VALID_MICROSERVICES?.trim() }
+            }
             steps {
                 script {
                     env.VALID_MICROSERVICES.split(',').each { service ->
