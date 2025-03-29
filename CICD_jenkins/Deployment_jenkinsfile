@@ -56,6 +56,12 @@ pipeline {
                     DEPLOYMENTS=$(kubectl get deployments -o jsonpath="{.items[*].metadata.name}")
 
                     for deployment in $DEPLOYMENTS; do
+                        # Skip Redis since it's a public image and not in GHCR
+                        if [[ "$deployment" == "redis" || "$deployment" == "redis-cart" ]]; then
+                            echo "⚠️ Skipping $deployment as it is a public Redis image."
+                            continue
+                        fi
+
                         echo "🚀 Checking if $deployment exists in GHCR..."
 
                         API_URL="https://api.github.com/users/$GHCR_USERNAME/packages/container/${deployment}/versions"
