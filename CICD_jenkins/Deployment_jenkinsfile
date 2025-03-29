@@ -56,7 +56,7 @@ pipeline {
 
                     for deployment in $DEPLOYMENTS; do
                         # Skip Redis-based deployments as they use public images
-                        if [[ "$deployment" == "redis" || "$deployment" == "redis-cart" ]]; then
+                        if [ "$deployment" = "redis" ] || [ "$deployment" = "redis-cart" ]; then
                             echo "⚠️ Skipping $deployment as it is a public Redis image."
                             continue
                         fi
@@ -68,7 +68,7 @@ pipeline {
                         # Check if the package exists in GHCR before fetching tags
                         HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GHCR_TOKEN" "$API_URL")
 
-                        if [[ "$HTTP_STATUS" -ne 200 ]]; then
+                        if [ "$HTTP_STATUS" -ne 200 ]; then
                             echo "⚠️ $deployment not found in GHCR. Skipping..."
                             continue
                         fi
@@ -81,7 +81,7 @@ pipeline {
                                     "$API_URL" | jq -r '.[0].metadata.container.tags[0]')
 
                         # Validate if LATEST_TAG is properly extracted
-                        if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
+                        if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
                             echo "⚠️ No tags found for $deployment! Skipping..."
                             continue
                         fi
