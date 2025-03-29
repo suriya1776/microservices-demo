@@ -48,4 +48,4 @@ jobs:
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
       - name: 🛡️ Run Snyk Container Scan
-        run: snyk container test ghcr.io/suriya1776/adservice:${{ env.IMAGE_TAG }} --fail-on=high
+        run: snyk container test ghcr.io/suriya1776/adservice:${{ env.IMAGE_TAG }} --severity-threshold=high
