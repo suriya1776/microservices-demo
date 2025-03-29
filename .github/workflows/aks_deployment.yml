@@ -1,7 +1,7 @@
 name: 🚀 Deploy Latest Images to AKS
 
 on:
-  workflow_dispatch:  # Manually trigger the deployment
+  workflow_dispatch:  # Allows manual triggering
   schedule:
     - cron: "0 * * * *"  # Runs every hour
 
@@ -24,7 +24,7 @@ jobs:
 
       - name: ⛵ Set AKS Context
         run: |
-          az aks get-credentials --resource-group <RESOURCE_GROUP> --name <AKS_CLUSTER_NAME> --overwrite-existing
+          az aks get-credentials --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
 
       - name: 🔄 Fetch Latest Image Tags and Update Deployments
         run: |
@@ -32,11 +32,11 @@ jobs:
           DEPLOYMENTS=$(kubectl get deployments -o jsonpath="{.items[*].metadata.name}")
 
           for deployment in $DEPLOYMENTS; do
-              echo "Fetching latest tag for $deployment..."
+              echo "🚀 Fetching latest tag for $deployment..."
 
               API_URL="https://api.github.com/users/${{ secrets.GHCR_USERNAME }}/packages/container/${deployment}/versions"
               
-              # Fetch the latest tag
+              # Fetch the latest tag from GHCR
               LATEST_TAG=$(curl -s -L -H "Accept: application/vnd.github+json" \
                           -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
                           -H "X-GitHub-Api-Version: 2022-11-28" \
