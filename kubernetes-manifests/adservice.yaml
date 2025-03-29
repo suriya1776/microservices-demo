@@ -43,7 +43,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: adservice
+        image: ghcr.io/suriya1776/adservice:latest
         ports:
         - containerPort: 9555
         env:

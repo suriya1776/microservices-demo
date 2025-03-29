@@ -43,7 +43,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: cartservice
+        image: ghcr.io/suriya1776/cartservice:latest
         ports:
         - containerPort: 7070
         env:

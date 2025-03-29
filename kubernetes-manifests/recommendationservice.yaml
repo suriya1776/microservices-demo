@@ -43,7 +43,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: recommendationservice
+        image: ghcr.io/suriya1776/recommendationservice:latest
         ports:
         - containerPort: 8080
         readinessProbe:

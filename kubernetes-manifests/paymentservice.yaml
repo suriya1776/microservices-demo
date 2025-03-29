@@ -43,7 +43,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: paymentservice
+        image: ghcr.io/suriya1776/paymentservice:latest
         ports:
         - containerPort: 50051
         env:
