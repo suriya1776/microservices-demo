@@ -3,11 +3,10 @@ name: Auto Image Scan
 on:
   schedule:
     - cron: "0 * * * *" # Runs every hour
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   scan-image:
-    name: Scan Latest GHCR Image with Trivy
     runs-on: ubuntu-latest
 
     steps:
@@ -16,35 +15,30 @@ jobs:
 
       - name: Fetch Latest Image SHA from GHCR
         run: |
-          echo "🔍 Fetching latest image SHA from GitHub Packages API..."
+          IMAGE_REPO="ghcr.io/suriya1776/adservice"
+          
+          # 🔍 Fetch latest image versions
+          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/users/suriya1776/packages/container/adservice/versions")
 
-          RESPONSE=$(curl -s -H "Accept: application/vnd.github+json" \
-                            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-                            "https://api.github.com/users/suriya1776/packages/container/adservice/versions")
+          echo "🔍 Raw API Response:"
+          echo "$RESPONSE"
 
-          echo "Raw Response: $RESPONSE"
+          # 🔹 Extract latest image SHA
+          LATEST_SHA=$(echo "$RESPONSE" | jq -r '.[0].name')
 
-          # Check if the response is empty or contains an error
-          if [[ -z "$RESPONSE" || "$RESPONSE" == *"message"* ]]; then
-            echo "❌ Error: Package not found or API request failed."
+          if [ -z "$LATEST_SHA" ] || [ "$LATEST_SHA" == "null" ]; then
+            echo "⚠️ No SHA found! API response may be empty or incorrect."
             exit 1
           fi
 
-          # Extract latest image SHA safely
-          LATEST_SHA=$(echo "$RESPONSE" | jq -r '.[0].name // empty')
+          echo "✅ Latest SHA: $LATEST_SHA"
+          echo "IMAGE_SHA=$LATEST_SHA" >> $GITHUB_ENV
 
-          if [[ -z "$LATEST_SHA" ]]; then
-            echo "❌ Error: No valid image SHA found!"
-            exit 1
-          fi
-
-          echo "✅ Latest Image SHA: $LATEST_SHA"
-          echo "LATEST_SHA=$LATEST_SHA" >> $GITHUB_ENV
-
-      - name: Run Trivy Scan on Latest GHCR Image
+      - name: Scan GHCR Image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "ghcr.io/suriya1776/adservice@${{ env.LATEST_SHA }}"
+          image-ref: "ghcr.io/suriya1776/adservice@${{ env.IMAGE_SHA }}"
           format: "table"
           severity: "HIGH,CRITICAL"
           exit-code: 1
