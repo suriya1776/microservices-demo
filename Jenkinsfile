@@ -27,7 +27,7 @@ pipeline {
                     env.CHANGED_MICROSERVICES = changedMicroservices.join(',')
 
                     if (changedMicroservices.isEmpty()) {
-                        echo "No microservices changed. Aborting build..."
+                        echo "No microservices changed. Aborting build...."
                         currentBuild.result = 'ABORTED'
                         error("No microservices changed.")
                     } else {
