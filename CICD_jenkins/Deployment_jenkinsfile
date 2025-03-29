@@ -103,4 +103,16 @@ pipeline {
                         echo "✅ Latest tag for $deployment: $LATEST_TAG"
 
                         # Get the actual container name inside the deployment
-                        CONTAINER_NAME=$(kubectl get deployment $deployment -o jsonpath="{.spec.template.spec_
+                        CONTAINER_NAME=$(kubectl get deployment $deployment -o jsonpath="{.spec.template.spec.containers[0].name}")
+
+                        echo "🔄 Updating container $CONTAINER_NAME in deployment $deployment..."
+
+                        # Update the deployment in AKS with the latest image
+                        kubectl set image deployment/$deployment $CONTAINER_NAME=ghcr.io/$GHCR_USERNAME/$deployment:$LATEST_TAG --namespace default
+                    done
+                    '''
+                }
+            }
+        }
+    }
+}
