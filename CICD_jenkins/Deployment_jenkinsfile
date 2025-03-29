@@ -1,0 +1,89 @@
+pipeline {
+    agent any
+
+    environment {
+        GHCR_USERNAME = credentials('GHCR_USERNAME')  // GHCR Username stored in Jenkins Credentials
+        GHCR_TOKEN = credentials('GHCR_TOKEN')  // GHCR Token stored in Jenkins Credentials
+        AZURE_CREDENTIALS = credentials('AZURE_CREDENTIALS') // Azure Service Principal Credentials
+        AZURE_RESOURCE_GROUP = credentials('AZURE_RESOURCE_GROUP')
+        AKS_CLUSTER_NAME = credentials('AKS_CLUSTER_NAME')
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                script {
+                    checkout scm
+                }
+            }
+        }
+
+        stage('Login to GHCR') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'GHCR_CREDENTIALS', usernameVariable: 'GHCR_USERNAME', passwordVariable: 'GHCR_TOKEN')]) {
+                        sh 'echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin'
+                    }
+                }
+            }
+        }
+
+        stage('Authenticate to Azure') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'AZURE_CREDENTIALS', variable: 'AZURE_CREDENTIALS')]) {
+                        sh 'echo "$AZURE_CREDENTIALS" > azure-credentials.json'
+                        sh 'az login --service-principal --username $(jq -r .clientId azure-credentials.json) --password $(jq -r .clientSecret azure-credentials.json) --tenant $(jq -r .tenantId azure-credentials.json)'
+                    }
+                }
+            }
+        }
+
+        stage('Set AKS Context') {
+            steps {
+                script {
+                    sh 'az aks get-credentials --resource-group "$AZURE_RESOURCE_GROUP" --name "$AKS_CLUSTER_NAME" --overwrite-existing'
+                }
+            }
+        }
+
+        stage('Fetch Latest Image Tags & Update Deployments') {
+            steps {
+                script {
+                    def deployments = sh(script: 'kubectl get deployments -o jsonpath="{.items[*].metadata.name}"', returnStdout: true).trim().split()
+
+                    for (deployment in deployments) {
+                        echo "🚀 Checking if $deployment exists in GHCR..."
+
+                        def apiUrl = "https://api.github.com/users/${GHCR_USERNAME}/packages/container/${deployment}/versions"
+                        def httpStatus = sh(script: "curl -s -o /dev/null -w \"%{http_code}\" -H \"Authorization: Bearer $GHCR_TOKEN\" \"$apiUrl\"", returnStdout: true).trim()
+
+                        if (httpStatus != "200") {
+                            echo "⚠️ $deployment not found in GHCR. Skipping..."
+                            continue
+                        }
+
+                        echo "📦 Fetching latest tag for $deployment..."
+
+                        def latestTag = sh(script: """curl -s -L -H "Accept: application/vnd.github+json" \\
+                            -H "Authorization: Bearer $GHCR_TOKEN" \\
+                            "$apiUrl" | jq -r '.[0].metadata.container.tags[0]'""", returnStdout: true).trim()
+
+                        if (!latestTag || latestTag == "null") {
+                            echo "⚠️ No tags found for $deployment! Skipping..."
+                            continue
+                        }
+
+                        echo "✅ Latest tag for $deployment: $latestTag"
+
+                        def containerName = sh(script: "kubectl get deployment $deployment -o jsonpath=\"{.spec.template.spec.containers[0].name}\"", returnStdout: true).trim()
+
+                        echo "🔄 Updating container $containerName in deployment $deployment..."
+
+                        sh "kubectl set image deployment/$deployment $containerName=ghcr.io/${GHCR_USERNAME}/$deployment:$latestTag --namespace default"
+                    }
+                }
+            }
+        }
+    }
+}
