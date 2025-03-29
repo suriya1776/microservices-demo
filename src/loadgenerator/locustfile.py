@@ -20,6 +20,7 @@ from faker import Faker
 import datetime
 fake = Faker()
 
+
 products = [
     '0PUK6V6EV0',
     '1YMWWN1N4O',
