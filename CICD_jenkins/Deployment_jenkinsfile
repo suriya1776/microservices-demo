@@ -10,13 +10,7 @@ pipeline {
     }
 
     stages {
-        stage('Install jq') {
-            steps {
-                script {
-                    sh 'sudo apt-get update && sudo apt-get install -y jq'
-                }
-            }
-        }
+
 
         stage('Checkout Code') {
             steps {
