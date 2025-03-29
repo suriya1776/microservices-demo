@@ -11,14 +11,6 @@ pipeline {
 
     stages {
 
-        stage('Install Dependencies') {
-            steps {
-                script {
-                    sh 'sudo apt-get update && sudo apt-get install -y jq'
-                }
-            }
-        }
-
         stage('Checkout Code') {
             steps {
                 checkout scm
@@ -63,7 +55,7 @@ pipeline {
                     DEPLOYMENTS=$(kubectl get deployments -o jsonpath="{.items[*].metadata.name}")
 
                     for deployment in $DEPLOYMENTS; do
-                        # Skip Redis-based deployments as they are public images
+                        # Skip Redis-based deployments as they use public images
                         if [[ "$deployment" == "redis" || "$deployment" == "redis-cart" ]]; then
                             echo "⚠️ Skipping $deployment as it is a public Redis image."
                             continue
@@ -84,15 +76,9 @@ pipeline {
                         echo "📦 Fetching latest tag for $deployment..."
 
                         # Fetch the latest tag safely
-                        API_RESPONSE=$(curl -s -L -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GHCR_TOKEN" "$API_URL")
-
-                        # Check if API response is valid JSON and contains data
-                        if [[ -z "$API_RESPONSE" || "$API_RESPONSE" == "null" || "$API_RESPONSE" == "[]" ]]; then
-                            echo "⚠️ No valid response for $deployment! Skipping..."
-                            continue
-                        fi
-
-                        LATEST_TAG=$(echo "$API_RESPONSE" | jq -r '.[0].metadata.container.tags[0]' 2>/dev/null)
+                        LATEST_TAG=$(curl -s -L -H "Accept: application/vnd.github+json" \
+                                    -H "Authorization: Bearer $GHCR_TOKEN" \
+                                    "$API_URL" | jq -r '.[0].metadata.container.tags[0]')
 
                         # Validate if LATEST_TAG is properly extracted
                         if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
