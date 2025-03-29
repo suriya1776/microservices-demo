@@ -21,14 +21,12 @@ jobs:
         run: |
           changed_files=$(git diff --name-only HEAD~1)
           echo "Changed files: $changed_files"
-
           changed_microservices=$(echo "$changed_files" | awk -F'/' '/^src\// {print $2}' | sort -u | paste -sd "," -)
           
           if [[ -z "$changed_microservices" ]]; then
             echo "No microservices changed. Exiting."
             exit 0
           fi
-
           echo "Changed microservices : $changed_microservices"
           echo "changed_services=$changed_microservices" >> $GITHUB_ENV
           echo "changed_services=$changed_microservices" >> $GITHUB_OUTPUT
@@ -58,14 +56,11 @@ jobs:
               echo "No Dockerfile found for $service"
             fi
           done
-
           valid_services=${valid_services%,}  # Remove trailing comma
-
           if [[ -z "$valid_services" ]]; then
             echo "No services with Dockerfile found. Exiting."
             exit 0
           fi
-
           echo "Valid services: $valid_services"
           echo "valid_services=$valid_services" >> $GITHUB_ENV
           echo "valid_services=$valid_services" >> $GITHUB_OUTPUT
@@ -85,9 +80,21 @@ jobs:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
 
+      - name: Set Image Tag
+        id: set-tag
+        run: |
+          BRANCH_NAME=$(echo "${{ github.ref_name }}" | tr '/' '_')
+          TODAY=$(date +'%Y%m%d')
+          IMAGE_TAG="release_${BRANCH_NAME}_${TODAY}"
+          
+          echo "Generated image tag: $IMAGE_TAG"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
       - name: Debug Valid Services
         run: |
           echo "Valid services received: '${{ needs.find-dockerfiles.outputs.valid_services }}'"
+          echo "Image tag being used: '${{ env.IMAGE_TAG }}'"
 
       - name: Build and Push Docker Images
         run: |
@@ -101,7 +108,7 @@ jobs:
               continue
             fi
             
-            image_name="ghcr.io/${{ secrets.GHCR_USERNAME }}/$service:latest"
+            image_name="ghcr.io/${{ secrets.GHCR_USERNAME }}/$service:${{ env.IMAGE_TAG }}"
             dockerfile_dir=$(dirname "$dockerfile_path")
           
             echo "Building image for $service..."
