@@ -1,47 +1,59 @@
-name: Update AKS Deployments with Latest GHCR Images
+name: 🚀 Deploy Latest Images to AKS
 
 on:
-  workflow_dispatch:  # Manually trigger when needed
+  workflow_dispatch:  # Manually trigger the deployment
   schedule:
     - cron: "0 * * * *"  # Runs every hour
 
 jobs:
   deploy:
+    name: 🔄 Update AKS Deployments with Latest Images
     runs-on: ubuntu-latest
 
     steps:
       - name: 🛎️ Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🔐 Log in to Azure
+      - name: 🔐 Log in to GHCR
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+
+      - name: 🔑 Authenticate to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: 🔄 Set Kubernetes Context
+      - name: ⛵ Set AKS Context
         run: |
-          az aks get-credentials --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }}
+          az aks get-credentials --resource-group <RESOURCE_GROUP> --name <AKS_CLUSTER_NAME> --overwrite-existing
 
-      - name: 🔄 Update AKS Deployments with Latest Images
+      - name: 🔄 Fetch Latest Image Tags and Update Deployments
         run: |
-          for deployment in $(kubectl get deployments -o jsonpath="{.items[*].metadata.name}")
-          do
+          # Get all deployment names in the cluster
+          DEPLOYMENTS=$(kubectl get deployments -o jsonpath="{.items[*].metadata.name}")
+
+          for deployment in $DEPLOYMENTS; do
               echo "Fetching latest tag for $deployment..."
-              
+
               API_URL="https://api.github.com/users/${{ secrets.GHCR_USERNAME }}/packages/container/${deployment}/versions"
               
+              # Fetch the latest tag
               LATEST_TAG=$(curl -s -L -H "Accept: application/vnd.github+json" \
                           -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
                           -H "X-GitHub-Api-Version: 2022-11-28" \
                           "$API_URL" | jq -r '.[0].metadata.container.tags[0]')
-              
+
               if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
-                  echo "⚠️ No tags found for $deployment!"
+                  echo "⚠️ No tags found for $deployment! Skipping..."
                   continue
               fi
 
               echo "✅ Latest tag for $deployment: $LATEST_TAG"
 
-              # Update the deployment in AKS
-              kubectl set image deployment/$deployment $deployment=ghcr.io/${{ secrets.GHCR_USERNAME }}/$deployment:$LATEST_TAG --namespace default
+              # Get the actual container name inside the deployment
+              CONTAINER_NAME=$(kubectl get deployment $deployment -o jsonpath="{.spec.template.spec.containers[0].name}")
+
+              echo "🔄 Updating container $CONTAINER_NAME in deployment $deployment..."
+
+              # Update the deployment in AKS with the latest image
+              kubectl set image deployment/$deployment $CONTAINER_NAME=ghcr.io/${{ secrets.GHCR_USERNAME }}/$deployment:$LATEST_TAG --namespace default
           done
