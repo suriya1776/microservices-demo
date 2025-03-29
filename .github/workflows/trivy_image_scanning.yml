@@ -1,20 +1,44 @@
-- name: Fetch Latest Image SHA from GHCR
-  run: |
-    IMAGE_REPO="ghcr.io/suriya1776/adservice"
-    RESPONSE=$(curl -s -H "Accept: application/vnd.github+json" \
-                      -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-                      "https://api.github.com/users/suriya1776/packages/container/adservice/versions")
+name: Auto Image Scan
 
-    echo "Raw Response: $RESPONSE"
+on:
+  schedule:
+    - cron: "0 * * * *" # Runs every hour
+  workflow_dispatch: # Allows manual trigger
 
-    # Extract latest image SHA
-    LATEST_SHA=$(echo "$RESPONSE" | jq -r '.[0].name')
+jobs:
+  scan-image:
+    name: Scan Latest GHCR Image with Trivy
+    runs-on: ubuntu-latest
 
-    if [[ -z "$LATEST_SHA" ]]; then
-      echo "❌ ERROR: No tags found! Using SHA instead."
-      exit 1
-    fi
+    steps:
+      - name: Log in to GitHub Container Registry (GHCR)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
-    IMAGE_NAME="${IMAGE_REPO}@${LATEST_SHA}"
-    echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
-    echo "✅ Scanning Image: ${IMAGE_NAME}"
+      - name: Fetch Latest Image SHA from GHCR
+        run: |
+          IMAGE_REPO="ghcr.io/suriya1776/adservice"
+          RESPONSE=$(curl -s -H "Accept: application/vnd.github+json" \
+                            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                            "https://api.github.com/users/suriya1776/packages/container/adservice/versions")
+
+          echo "Raw Response: $RESPONSE"
+
+          # Extract latest image SHA
+          LATEST_SHA=$(echo "$RESPONSE" | jq -r '.[0].name')
+
+          if [[ -z "$LATEST_SHA" || "$LATEST_SHA" == "null" ]]; then
+            echo "❌ ERROR: No valid image SHA found!"
+            exit 1
+          fi
+
+          IMAGE_NAME="${IMAGE_REPO}@${LATEST_SHA}"
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
+          echo "✅ Using Image: ${IMAGE_NAME}"
+
+      - name: Run Trivy Scan on Latest GHCR Image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}
+          format: "table"
+          severity: "HIGH,CRITICAL"
+          exit-code: 1
