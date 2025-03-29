@@ -1,39 +1,20 @@
-name: Auto Image Scan
+- name: Fetch Latest Image SHA from GHCR
+  run: |
+    IMAGE_REPO="ghcr.io/suriya1776/adservice"
+    RESPONSE=$(curl -s -H "Accept: application/vnd.github+json" \
+                      -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                      "https://api.github.com/users/suriya1776/packages/container/adservice/versions")
 
-on:
-  schedule:
-    - cron: "0 * * * *" # Runs every hour
-  workflow_dispatch: # Allows manual trigger
+    echo "Raw Response: $RESPONSE"
 
-jobs:
-  scan-image:
-    name: Scan Latest GHCR Image with Trivy
-    runs-on: ubuntu-latest
+    # Extract latest image SHA
+    LATEST_SHA=$(echo "$RESPONSE" | jq -r '.[0].name')
 
-    steps:
-      - name: Log in to GitHub Container Registry (GHCR)
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+    if [[ -z "$LATEST_SHA" ]]; then
+      echo "❌ ERROR: No tags found! Using SHA instead."
+      exit 1
+    fi
 
-      - name: Fetch Latest Image SHA from GHCR
-        run: |
-          IMAGE_REPO="ghcr.io/suriya1776/adservice"
-          LATEST_SHA=$(curl -s -H "Accept: application/vnd.github+json" \
-                              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-                              "https://api.github.com/users/suriya1776/packages/container/adservice/versions" | jq -r '.[0].name')
-
-          IMAGE_NAME="${IMAGE_REPO}@${LATEST_SHA}"
-          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
-          echo "Scanning Image: ${IMAGE_NAME}"
-
-      - name: Install Trivy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.49.1_Linux-64bit.tar.gz
-          tar -xvzf trivy_0.49.1_Linux-64bit.tar.gz
-          sudo mv trivy /usr/local/bin/
-          trivy --version
-
-      - name: Run Trivy Scan on Latest GHCR Image
-        run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL "${{ env.IMAGE_NAME }}"
+    IMAGE_NAME="${IMAGE_REPO}@${LATEST_SHA}"
+    echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
+    echo "✅ Scanning Image: ${IMAGE_NAME}"
