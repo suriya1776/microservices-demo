@@ -67,7 +67,7 @@ if(process.env.ENABLE_TRACING == "1") {
   provider.register();
 }
 else {
-  logger.info("Tracing disabled.")
+  logger.info("Tracing disabled..")
 }
 
 const path = require('path');
