@@ -11,6 +11,13 @@ pipeline {
 
     stages {
 
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    sh 'sudo apt-get update && sudo apt-get install -y jq'
+                }
+            }
+        }
 
         stage('Checkout Code') {
             steps {
@@ -56,7 +63,7 @@ pipeline {
                     DEPLOYMENTS=$(kubectl get deployments -o jsonpath="{.items[*].metadata.name}")
 
                     for deployment in $DEPLOYMENTS; do
-                        # Skip Redis since it's a public image and not in GHCR
+                        # Skip Redis-based deployments as they are public images
                         if [[ "$deployment" == "redis" || "$deployment" == "redis-cart" ]]; then
                             echo "⚠️ Skipping $deployment as it is a public Redis image."
                             continue
@@ -76,11 +83,18 @@ pipeline {
 
                         echo "📦 Fetching latest tag for $deployment..."
 
-                        # Fetch the latest tag
-                        LATEST_TAG=$(curl -s -L -H "Accept: application/vnd.github+json" \
-                                    -H "Authorization: Bearer $GHCR_TOKEN" \
-                                    "$API_URL" | jq -r '.[0].metadata.container.tags[0]')
+                        # Fetch the latest tag safely
+                        API_RESPONSE=$(curl -s -L -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GHCR_TOKEN" "$API_URL")
 
+                        # Check if API response is valid JSON and contains data
+                        if [[ -z "$API_RESPONSE" || "$API_RESPONSE" == "null" || "$API_RESPONSE" == "[]" ]]; then
+                            echo "⚠️ No valid response for $deployment! Skipping..."
+                            continue
+                        fi
+
+                        LATEST_TAG=$(echo "$API_RESPONSE" | jq -r '.[0].metadata.container.tags[0]' 2>/dev/null)
+
+                        # Validate if LATEST_TAG is properly extracted
                         if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
                             echo "⚠️ No tags found for $deployment! Skipping..."
                             continue
@@ -89,16 +103,4 @@ pipeline {
                         echo "✅ Latest tag for $deployment: $LATEST_TAG"
 
                         # Get the actual container name inside the deployment
-                        CONTAINER_NAME=$(kubectl get deployment $deployment -o jsonpath="{.spec.template.spec.containers[0].name}")
-
-                        echo "🔄 Updating container $CONTAINER_NAME in deployment $deployment..."
-
-                        # Update the deployment in AKS with the latest image
-                        kubectl set image deployment/$deployment $CONTAINER_NAME=ghcr.io/$GHCR_USERNAME/$deployment:$LATEST_TAG --namespace default
-                    done
-                    '''
-                }
-            }
-        }
-    }
-}
+                        CONTAINER_NAME=$(kubectl get deployment $deployment -o jsonpath="{.spec.template.spec_
