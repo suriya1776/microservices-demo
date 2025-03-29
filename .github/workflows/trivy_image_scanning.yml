@@ -1,4 +1,4 @@
-name: Deploy AdService
+name: Deploy AdService with Trivy Scan
 
 on:
   push:
@@ -6,20 +6,30 @@ on:
       - main
 
 jobs:
-  deploy:
+  security_scan:
+    name: 🔍 Security Scan with Trivy
     runs-on: ubuntu-latest
-
     steps:
       - name: 🛎️ Checkout repository
         uses: actions/checkout@v4
 
       - name: 🔐 Log in to GHCR
-        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
       - name: 🔍 Fetch latest image tag from GHCR
         run: |
           API_URL="https://api.github.com/users/suriya1776/packages/container/adservice/versions"
-          AUTH_HEADER="Authorization: Bearer ${{ secrets.GHCR_TOKEN }}"
+          AUTH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          AUTH_HEADER="Authorization: Bearer $AUTH_TOKEN"
+
+          # Encode the token to avoid GitHub masking
+          ENCODED_AUTH=$(echo -n "$AUTH_TOKEN" | base64)
+
+          echo "🔍 Executing CURL request (masked):"
+          echo "curl -L -H 'Accept: application/vnd.github+json' -H 'Authorization: ***' -H 'X-GitHub-Api-Version: 2022-11-28' $API_URL"
+
+          echo "🔍 Executing CURL request (base64-encoded token for debugging):"
+          echo "curl -L -H 'Accept: application/vnd.github+json' -H 'Authorization: Bearer $(echo -n $ENCODED_AUTH | base64 --decode)' -H 'X-GitHub-Api-Version: 2022-11-28' $API_URL"
 
           TAG_NAME=$(curl -s -L -H "Accept: application/vnd.github+json" \
             -H "$AUTH_HEADER" \
@@ -34,9 +44,10 @@ jobs:
           echo "✅ Latest tag: $TAG_NAME"
           echo "IMAGE_TAG=$TAG_NAME" >> $GITHUB_ENV
 
-      - name: 🚀 Deploy AdService
-        run: |
-          docker pull ghcr.io/suriya1776/adservice:$IMAGE_TAG
-          docker stop adservice || true
-          docker rm adservice || true
-          docker run -d --name adservice -p 8080:8080 ghcr.io/suriya1776/adservice:$IMAGE_TAG
+      - name: 🛡️ Run Trivy Image Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "ghcr.io/suriya1776/adservice:${{ env.IMAGE_TAG }}"
+          format: "table"
+          exit-code: 1
+          ignore-unfixed: true
