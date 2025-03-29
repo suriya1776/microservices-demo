@@ -16,29 +16,35 @@ jobs:
 
       - name: Fetch Latest Image SHA from GHCR
         run: |
-          IMAGE_REPO="ghcr.io/suriya1776/adservice"
+          echo "🔍 Fetching latest image SHA from GitHub Packages API..."
+
           RESPONSE=$(curl -s -H "Accept: application/vnd.github+json" \
                             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
                             "https://api.github.com/users/suriya1776/packages/container/adservice/versions")
 
           echo "Raw Response: $RESPONSE"
 
-          # Extract latest image SHA
-          LATEST_SHA=$(echo "$RESPONSE" | jq -r '.[0].name')
-
-          if [[ -z "$LATEST_SHA" || "$LATEST_SHA" == "null" ]]; then
-            echo "❌ ERROR: No valid image SHA found!"
+          # Check if the response is empty or contains an error
+          if [[ -z "$RESPONSE" || "$RESPONSE" == *"message"* ]]; then
+            echo "❌ Error: Package not found or API request failed."
             exit 1
           fi
 
-          IMAGE_NAME="${IMAGE_REPO}@${LATEST_SHA}"
-          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
-          echo "✅ Using Image: ${IMAGE_NAME}"
+          # Extract latest image SHA safely
+          LATEST_SHA=$(echo "$RESPONSE" | jq -r '.[0].name // empty')
+
+          if [[ -z "$LATEST_SHA" ]]; then
+            echo "❌ Error: No valid image SHA found!"
+            exit 1
+          fi
+
+          echo "✅ Latest Image SHA: $LATEST_SHA"
+          echo "LATEST_SHA=$LATEST_SHA" >> $GITHUB_ENV
 
       - name: Run Trivy Scan on Latest GHCR Image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.IMAGE_NAME }}
+          image-ref: "ghcr.io/suriya1776/adservice@${{ env.LATEST_SHA }}"
           format: "table"
           severity: "HIGH,CRITICAL"
           exit-code: 1
