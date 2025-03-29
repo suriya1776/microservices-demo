@@ -1,0 +1,51 @@
+name: Deploy AdService with Snyk Scan
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  security_scan:
+    name: 🔍 Security Scan with Snyk
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🛎️ Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔐 Log in to GHCR
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+
+      - name: 🔍 Fetch latest image tag from GHCR
+        run: |
+          API_URL="https://api.github.com/users/suriya1776/packages/container/adservice/versions"
+          AUTH_TOKEN="${{ secrets.GHCR_TOKEN }}"
+          AUTH_HEADER="Authorization: Bearer $AUTH_TOKEN"
+
+          # Encode the token to avoid GitHub masking
+          ENCODED_AUTH=$(echo -n "$AUTH_TOKEN" | base64)
+
+          TAG_NAME=$(curl -s -L -H "Accept: application/vnd.github+json" \
+            -H "$AUTH_HEADER" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$API_URL" | jq -r '.[0].metadata.container.tags[0]')
+
+          if [[ -z "$TAG_NAME" || "$TAG_NAME" == "null" ]]; then
+            echo "⚠️ No tags found for the latest image!"
+            exit 1
+          fi
+
+          echo "✅ Latest tag: $TAG_NAME"
+          echo "IMAGE_TAG=$TAG_NAME" >> $GITHUB_ENV
+
+      - name: 🔐 Install Snyk
+        run: |
+          curl -Lo snyk https://github.com/snyk/snyk/releases/latest/download/snyk-linux
+          chmod +x snyk
+          sudo mv snyk /usr/local/bin/
+
+      - name: 🔍 Authenticate Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: 🛡️ Run Snyk Container Scan
+        run: snyk container test ghcr.io/suriya1776/adservice:${{ env.IMAGE_TAG }} --fail-on=high
