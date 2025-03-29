@@ -3,42 +3,41 @@ name: Auto Image Scan
 on:
   schedule:
     - cron: "0 * * * *" # Runs every hour
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual trigger
 
 jobs:
   scan-image:
+    name: Scan Latest GHCR Image with Trivy
     runs-on: ubuntu-latest
 
     steps:
       - name: Log in to GitHub Container Registry (GHCR)
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
-      - name: Fetch Latest Image SHA from GHCR
+      - name: Fetch Latest Image Tag from GHCR
         run: |
           IMAGE_REPO="ghcr.io/suriya1776/adservice"
-          
-          # 🔍 Fetch latest image versions
+
+          # Fetch tags list and get the latest one
           RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/users/suriya1776/packages/container/adservice/versions")
+            "https://ghcr.io/v2/suriya1776/adservice/tags/list")
 
-          echo "🔍 Raw API Response:"
-          echo "$RESPONSE"
+          echo "🔍 Raw API Response: $RESPONSE"
 
-          # 🔹 Extract latest image SHA
-          LATEST_SHA=$(echo "$RESPONSE" | jq -r '.[0].name')
+          LATEST_TAG=$(echo "$RESPONSE" | jq -r '.tags | sort | last')
 
-          if [ -z "$LATEST_SHA" ] || [ "$LATEST_SHA" == "null" ]; then
-            echo "⚠️ No SHA found! API response may be empty or incorrect."
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" == "null" ]; then
+            echo "⚠️ No valid image tag found!"
             exit 1
           fi
 
-          echo "✅ Latest SHA: $LATEST_SHA"
-          echo "IMAGE_SHA=$LATEST_SHA" >> $GITHUB_ENV
+          echo "✅ Using latest image tag: $LATEST_TAG"
+          echo "IMAGE_NAME=${IMAGE_REPO}:${LATEST_TAG}" >> $GITHUB_ENV
 
-      - name: Scan GHCR Image with Trivy
+      - name: Run Trivy Scan on Latest GHCR Image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "ghcr.io/suriya1776/adservice@${{ env.IMAGE_SHA }}"
+          image-ref: ${{ env.IMAGE_NAME }}
           format: "table"
           severity: "HIGH,CRITICAL"
           exit-code: 1
