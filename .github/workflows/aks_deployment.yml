@@ -1,7 +1,7 @@
 name: 🚀 Deploy Latest Images to AKS
 
 on:
-  workflow_dispatch:  # Allows manual triggering
+  workflow_dispatch:
   schedule:
     - cron: "0 * * * *"  # Runs every hour
 
@@ -28,18 +28,26 @@ jobs:
 
       - name: 🔄 Fetch Latest Image Tags and Update Deployments
         run: |
-          # Get all deployment names in the cluster
           DEPLOYMENTS=$(kubectl get deployments -o jsonpath="{.items[*].metadata.name}")
 
           for deployment in $DEPLOYMENTS; do
-              echo "🚀 Fetching latest tag for $deployment..."
+              echo "🚀 Checking if $deployment exists in GHCR..."
 
               API_URL="https://api.github.com/users/${{ secrets.GHCR_USERNAME }}/packages/container/${deployment}/versions"
-              
-              # Fetch the latest tag from GHCR
+
+              # Check if the package exists in GHCR before fetching tags
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" "$API_URL")
+
+              if [[ "$HTTP_STATUS" -ne 200 ]]; then
+                  echo "⚠️ $deployment not found in GHCR. Skipping..."
+                  continue
+              fi
+
+              echo "📦 Fetching latest tag for $deployment..."
+
+              # Fetch the latest tag
               LATEST_TAG=$(curl -s -L -H "Accept: application/vnd.github+json" \
                           -H "Authorization: Bearer ${{ secrets.GHCR_TOKEN }}" \
-                          -H "X-GitHub-Api-Version: 2022-11-28" \
                           "$API_URL" | jq -r '.[0].metadata.container.tags[0]')
 
               if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
